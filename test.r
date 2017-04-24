@@ -40,46 +40,6 @@ plot01
 #' Peak frequencies were extracted analytically assuming constant sampling rate. Total number of features:855.
 #' The features included in the model are summary statistics and signal peak frequencies for each num_window.
 
-#+ eval=FALSE
-mydata$training<-mydata$training%>%
-        mutate(partition=ifelse(
-                num_window%in%c(mydata[[2]][,7]-1,mydata[[2]][,7],mydata[[2]][,7]+1),
-                "testing",partition)
-        )
-names(mydata$testing)[160]<-"classe"
-mydata$testing$classe<-"A"
-
-mydata$testing<-bind_rows(
-        mydata$testing,mydata$training%>%
-                dplyr::filter(partition=="testing"))
-mydata$training<-mydata$training%>%
-        dplyr::filter(partition!="testing")
-
-
-
-# hide the labels
-#+ eval=FALSE
-quizid<-data.frame(mydata$testing$X,num_window=mydata$testing$num_window)
-newid<-0-sample(10000,n_distinct(mydata$testing$num_window))
-
-j=0
-for (i in unique(mydata$testing$num_window))
-{
-        j<-j+1
-        mydata$testing$num_window[mydata$testing$num_window==i]<-newid[j]
-        quizid$num_window[quizid$num_window==i]<-newid[j]
-}
-mydata$testing$classe<-"A"
-
-
-mydf<-bind_rows(
-        lapply(mydata,function(x)
-        {
-                x<-x[,which(sapply(x,function(y) which(any(complete.cases(y))))>0)]
-                x%>%dplyr::select(-partition)
-        }
-        )
-)
 #' #Feature selection
 #' The training partition was scaled and centered. The missing values were imputed using k nearest neighbors algorithm [3]. 
 #' Near zero variance variables were eliminated (99/1 ratio, minimum 4 unique values).
@@ -122,7 +82,6 @@ library(tidyr)
 library("numDeriv")
 library(data.table)
 library(signal)
-library(anytime)
 set.seed(654)
 cf<-cheby2(2,1,c(0.4,0.8),type="high")
 
@@ -183,6 +142,48 @@ for (i in seq_along(mydata))
         mydata[[i]]$partition<-names(mydata)[i]
         
 }
+
+
+#+ eval=FALSE
+mydata$training<-mydata$training%>%
+        mutate(partition=ifelse(
+                num_window%in%c(mydata[[2]][,7]-1,mydata[[2]][,7],mydata[[2]][,7]+1),
+                "testing",partition)
+        )
+names(mydata$testing)[160]<-"classe"
+mydata$testing$classe<-"A"
+
+mydata$testing<-bind_rows(
+        mydata$testing,mydata$training%>%
+                dplyr::filter(partition=="testing"))
+mydata$training<-mydata$training%>%
+        dplyr::filter(partition!="testing")
+
+
+
+# hide the labels
+#+ eval=FALSE
+quizid<-data.frame(mydata$testing$X,num_window=mydata$testing$num_window)
+newid<-0-sample(10000,n_distinct(mydata$testing$num_window))
+
+j=0
+for (i in unique(mydata$testing$num_window))
+{
+        j<-j+1
+        mydata$testing$num_window[mydata$testing$num_window==i]<-newid[j]
+        quizid$num_window[quizid$num_window==i]<-newid[j]
+}
+mydata$testing$classe<-"A"
+
+
+mydf<-bind_rows(
+        lapply(mydata,function(x)
+        {
+                x<-x[,which(sapply(x,function(y) which(any(complete.cases(y))))>0)]
+                x%>%dplyr::select(-partition)
+        }
+        )
+)
 mydf0<-mydf%>%dplyr::filter(new_window=="yes")
 mydf1<-mydf%>%dplyr::filter(new_window=="no")
 cols1<-which(col.complete(mydf1))
@@ -251,8 +252,7 @@ training1<-training%>%
 #+ eval=FALSE
 cluster <- makeCluster(detectCores() - 0) 
 registerDoParallel(cluster)
-preproc<-preProcess(training1,method = c("nzv","knnImpute","center","scale"),
-                    thresh = 0.99,freqCut = 99/1,uniqueCut = 3)
+preproc<-preProcess(training1,method = c("knnImpute","center","scale"))
 trainingpre<-predict(preproc,training1)
 #trainingpre<-trainingpre[nearZeroVar(trainingpre,uniqueCut = 1)]
 #feature selection examples by About Jason Brownlee
