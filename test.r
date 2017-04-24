@@ -1,41 +1,46 @@
+#
 
-#Weight Lifting Exercise:Recognition of Common Patterns
-##  Vitalij Vasil'ev
+#' ---
+#' title: "Weight Lifting Exercise:Recognition of Common Patterns"
+#' author: "Vitalij Vasil'ev"
+#' header-includes:
+#' output:html_document
+#' keep_md: true
+#'       
+#' ---
+#+global_options, include=FALSE
+#+ echo=F
+load("test-Workspace.RData")
 
+#' #Summary
+#'  Researches have conducted various studies involving measurements of supervised human activities. 
+#'  The goal is often classification and recognition of activity type. 
+#'  This assignment is a subsequent analysis of HAR Weight Lifting Exercises[1] data. 
+#'  Unilateral dumbbell biceps curls were performed by 6 male subjects in each of forms: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). 
+#' Human activity recognition project has published data from inertial measurement units, gyroscope and magnetometer at a joint sampling rate of 45 Hz. with activity labels and additional variables. 
+#'  For each of the 4 sensors E. Velloso et. al [1] have calculated 24 features. 
+#' 
+#'  The problem is to classify the activities in a sample without labels. In other words, to build a model based on measured variables and to predict Classe variable.
+#'  
+#' #Exploratory plots 
+#' The researchers have used sliding window approach with 5 fixed window sizes ranging from 0.5s to 2.5s.
+#' "num_window" is the id variable for each window. The data was originally divided by "user_name" and "classe" in chronological order and then split into time windows.
+#' num_window and new_window variables were introduced  as result of feature extraction. Randomly splitting the dataset afterwards causes data leakage.
+#' The variables are readings from sensors derived variables and summary statistics. There are missing values in summary statistics columns.
+#' 
+#+ echo=F
+plot01
+#' The gravity component of acceleration on z axis is apparent. 3 dummy variables were introduced which divided the participants into 3 sets:"error in class D", "low acceleration on belt.z", "high acceleration on belt.z".
 
+#' 
+#' # Data processing and feature extraction 
+#'  
+#' The complete dataset was split into training and required quiz sets by num_window with respect to overlap. 
+#' The R code in appendix section applies a high pass filter [2] to frequency domain signal for each window.
+#' Peak frequencies were extracted analytically assuming constant sampling rate. Total number of features:855.
+#' The features included in the model are summary statistics and signal peak frequencies for each num_window.
 
-
-
-#Summary
- Researches have conducted various studies involving measurements of supervised human activities. 
- The goal is often classification and recognition of activity type. 
- This assignment is a subsequent analysis of HAR Weight Lifting Exercises[1] data. 
- Unilateral dumbbell biceps curls were performed by 6 male subjects in each of forms: exactly according to the specification (Class A), throwing the elbows to the front (Class B), lifting the dumbbell only halfway (Class C), lowering the dumbbell only halfway (Class D) and throwing the hips to the front (Class E). 
-Human activity recognition project has published data from inertial measurement units, gyroscope and magnetometer at a joint sampling rate of 45 Hz. with activity labels and additional variables. 
- For each of the 4 sensors E. Velloso et. al [1] have calculated 24 features. 
-
- The problem is to classify the activities in a sample without labels. In other words, to build a model based on measured variables and to predict Classe variable.
- 
-#Exploratory plots 
-The researchers have used sliding window approach with 5 fixed window sizes ranging from 0.5s to 2.5s.
-"num_window" is the id variable for each window. The data was originally divided by "user_name" and "classe" in chronological order and then split into time windows.
-num_window and new_window variables were introduced  as result of feature extraction. Randomly splitting the dataset afterwards causes data leakage.
-The variables are readings from sensors derived variables and summary statistics. There are missing values in summary statistics columns.
-
-
-![](figure/unnamed-chunk-3-1.png)
-
-The gravity component of acceleration on z axis is apparent. 3 dummy variables were introduced which divided the participants into 3 sets:"error in class D", "low acceleration on belt.z", "high acceleration on belt.z".
-
-# Data processing and feature extraction 
- 
-The complete dataset was split into training and required quiz sets by num_window with respect to overlap. 
-The R code in appendix section applies a high pass filter [2] to frequency domain signal for each window.
-Peak frequencies were extracted analytically assuming constant sampling rate. Total number of features:855.
-The features included in the model are summary statistics and signal peak frequencies for each num_window.
-
-
-```r
+#+ eval=FALSE
 mydata$training<-mydata$training%>%
         mutate(partition=ifelse(
                 num_window%in%c(mydata[[2]][,7]-1,mydata[[2]][,7],mydata[[2]][,7]+1),
@@ -53,9 +58,7 @@ mydata$training<-mydata$training%>%
 
 
 # hide the labels
-```
-
-```r
+#+ eval=FALSE
 quizid<-data.frame(mydata$testing$X,num_window=mydata$testing$num_window)
 newid<-0-sample(10000,n_distinct(mydata$testing$num_window))
 
@@ -77,69 +80,37 @@ mydf<-bind_rows(
         }
         )
 )
-```
+#' #Feature selection
+#' The training partition was scaled and centered. The missing values were imputed using k nearest neighbors algorithm [3]. 
+#' Near zero variance variables were eliminated (99/1 ratio, minimum 4 unique values).
+#' Recursive feature elimination [4] [5] function (caret package) was called on the processed data as a wrapper[6].
+#'  The parameters include metric: Cohen's kappa[7] coefficient, random forests[8] classification and 10 fold repeated cross-validation.
+#' 72 features were selected. All of them were summary statistics. 
 
-#Feature selection
-The training partition was scaled and centered. The missing values were imputed using k nearest neighbors algorithm [3]. 
-Near zero variance variables were eliminated (99/1 ratio, minimum 4 unique values).
-Recursive feature elimination [4] [5] function (caret package) was called on the processed data as a wrapper[6].
- The parameters include metric: Cohen's kappa[7] coefficient, random forests[8] classification and 10 fold repeated cross-validation.
-72 features were selected. All of them were summary statistics. 
-
-
-```
-## $mar
-## [1] 5.1 4.1 4.1 2.1
-## 
-## $pty
-## [1] "m"
-```
-
-![](figure/unnamed-chunk-6-1.png)
-
-Where p_o is relative observed agreement ratio, N is number of ranked rows, n_k_i is the number of times rater i predicted category k.
-
-![](figure/unnamed-chunk-7-1.png)
-
-# Training the classifier
-Random forests[8] classifier (caret package) was trained with RFE wrapper.
-Random forests algorithm uses bagging and decision trees.
-
- For each sample it grows a decision tree. At each candidate split it selects a random subset of features.  Then it takes the majority vote from the decision trees.
- 
-
-
-```r
+#+ fig.width=12, fig.height=8, echo=F
+require(grDevices); require(graphics)
+make.table(2, 1)
+draw.plotmath.cell(expression(k==1-(1-p[o])/(1-p[e])),0,1,"Kappa")
+draw.plotmath.cell(expression(p[e]==1/N^2*sum(n[k1]*n[k2],i=1,k)),1,2,"hypothetical probability of chance agreement")
+#' Where p_o is relative observed agreement ratio, N is number of ranked rows, n_k_i is the number of times rater i predicted category k.
+#+ echo=F
+plot02 
+#' # Training the classifier
+#' Random forests[8] classifier (caret package) was trained with RFE wrapper.
+#' Random forests algorithm uses bagging and decision trees.
+#' 
+#'  For each sample it grows a decision tree. At each candidate split it selects a random subset of features.  Then it takes the majority vote from the decision trees.
+#'  
 results$fit
-```
-
-```
-## 
-## Call:
-##  randomForest(x = x, y = y, importance = first) 
-##                Type of random forest: classification
-##                      Number of trees: 500
-## No. of variables tried at each split: 8
-## 
-##         OOB estimate of  error rate: 10.35%
-## Confusion matrix:
-##     A   B   C   D   E class.error
-## A 213   4   3   1   0   0.0361991
-## B  13 124   4   5   2   0.1621622
-## C   1  12 132   2   1   0.1081081
-## D   1   1  12 120   4   0.1304348
-## E   2   4   7   4 130   0.1156463
-```
-
-# Conclusion
-Cross-validation Kappa=0.86, Accuracy=0.89
-Random forests algorithm is robust to outliers and noisy data. The classifier doesn't need to be trained for new participants. 
-Out of sample error rate is estimated somewhat lower because of small sample size.
-
-# Appendix
+#' # Conclusion
+#' Cross-validation Kappa=0.86, Accuracy=0.89
+#' Random forests algorithm is robust to outliers and noisy data. The classifier doesn't need to be trained for new participants. 
+#' Out of sample error rate is estimated somewhat lower because of small sample size.
 
 
-```r
+#'
+#' # Appendix
+#+ eval=FALSE
 library(caret)
 library(e1071)
 library(randomForest)
@@ -277,9 +248,7 @@ training1<-training%>%
         dplyr::select(-user_name.x,-num_window,-classe.x)
 
 #separate imputation for training partition or data will be leaked
-```
-
-```r
+#+ eval=FALSE
 cluster <- makeCluster(detectCores() - 0) 
 registerDoParallel(cluster)
 preproc<-preProcess(training1,method = c("nzv","knnImpute","center","scale"),
@@ -291,9 +260,7 @@ trainingpre<-predict(preproc,training1)
 # define the control using a random forest selection function
 control <- rfeControl(functions=rfFuncs, method="repeatedcv", number=10,allowParallel=T,verbose = T)
 # run the RFE algorithm
-```
-
-```r
+#+ eval=FALSE
 results <- rfe(metric = "Kappa",trainingpre,y$classe.x, sizes=c(20:floor(ncol(trainingpre)/5)), rfeControl=control)
 # summarize the results
 print(results)
@@ -303,39 +270,25 @@ predictors(results)
 plot02<-plot(results, type=c("g", "o"))
 stopCluster(cluster)
 registerDoSEQ()
-```
-
-```r
+#+ eval=FALSE
 quizpre<-predict(preproc,quiz)
 quizrf<-predict(results,quizpre)
-```
-
-
-
-
-```r
+#' 
 apply(quizrf[which(quiz$num_window%in%quizid$num_window[1:20]),2:6],1,which.max)
-```
-
-```
-##  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 16 17 18 19 20 
-##  1  1  1  3  1  5  4  1  1  1  2  3  2  1  5  5  1  2  1  2
-```
-
-
-#References:
-[1] E. Velloso, A. Bulling, H. Gellersen,W. Ugulino, H. Fuks. Qualitative Activity Recognition of Weight Lifting Exercises. 
-
-[2] Richard W. Daniels (1974). Approximation Methods for Electronic Filter Design. New York: McGraw-Hill. ISBN 0-07-015308-6.
-
-[3] D. Coomans, D.L. Massart (1982). "Alternative k-nearest neighbour rules in supervised pattern recognition : Part 1. k-Nearest neighbour classification by using alternative voting rules". Analytica Chimica Acta.
-
-[4] Gareth James, Daniela Witten, Trevor Hastie, Robert Tibshirani . An Introduction to Statistical Learning. Springer.(2013) p. 204.
-
-[5] I. Guyon A. Elisseeff An Introduction to Variable and Feature Selection Journal of Machine Learning Research 3 (2003) 1157-1182
-
-[6] M. A. Hall. Correlation-based Feature Subset Selection for Machine Learning . PhD thesis, Department of Computer Science, University of Waikato, Hamilton, New Zealand, 1999.
-
-[7] J. Cohen,  "A coefficient of agreement for nominal scales". Educational and Psychological Measurement.(1960) 20 (1): 37–46. 
-
-[8] L. B. Statistics and L. Breiman. Random forests. In Machine Learning , pages 5–32, 2001.
+#' 
+#' #References:
+#'[1] E. Velloso, A. Bulling, H. Gellersen,W. Ugulino, H. Fuks. Qualitative Activity Recognition of Weight Lifting Exercises. 
+#'
+#'[2] Richard W. Daniels (1974). Approximation Methods for Electronic Filter Design. New York: McGraw-Hill. ISBN 0-07-015308-6.
+#'
+#'[3] D. Coomans, D.L. Massart (1982). "Alternative k-nearest neighbour rules in supervised pattern recognition : Part 1. k-Nearest neighbour classification by using alternative voting rules". Analytica Chimica Acta.
+#'
+#'[4] Gareth James, Daniela Witten, Trevor Hastie, Robert Tibshirani . An Introduction to Statistical Learning. Springer.(2013) p. 204.
+#'
+#'[5] I. Guyon A. Elisseeff An Introduction to Variable and Feature Selection Journal of Machine Learning Research 3 (2003) 1157-1182
+#'
+#'[6] M. A. Hall. Correlation-based Feature Subset Selection for Machine Learning . PhD thesis, Department of Computer Science, University of Waikato, Hamilton, New Zealand, 1999.
+#'
+#'[7] J. Cohen,  "A coefficient of agreement for nominal scales". Educational and Psychological Measurement.(1960) 20 (1): 37–46. 
+#'
+#'[8] L. B. Statistics and L. Breiman. Random forests. In Machine Learning , pages 5–32, 2001.
